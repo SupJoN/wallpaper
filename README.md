@@ -5,7 +5,7 @@ Windows下的动态壁纸软件
 本代码遵守GPLv3.0开源
 
 ## 使用
-安装win32api win32con win32gui win32print模块
+安装pywin32模块
 ```
 pip install pywin32
 ```
