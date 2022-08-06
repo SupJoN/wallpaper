@@ -7,10 +7,7 @@ Windows下的动态壁纸软件
 ## 使用
 安装win32api win32con win32gui win32print模块
 ```
-pip install win32api
-pip install win32con
-pip install win32gui
-pip install win32print
+pip install pywin32
 ```
 在`config.json`中的`video`键的值输入视频路径（需要2个反斜杠）。
 
