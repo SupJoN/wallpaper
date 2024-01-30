@@ -6,8 +6,12 @@ Windows下的动态壁纸软件
 
 ## 使用
 安装pywin32模块
+安装coloredlogs模块
+安装cv2模块
 ```
 pip install pywin32
+pip install coloredlogs
+pip install opencv-python
 ```
 在`config.json`中的`video`键的值输入视频路径(需要2个反斜杠)。
 
