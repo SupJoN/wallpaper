@@ -13,17 +13,30 @@ Github @BtbN。(https://github.com/BtbN/FFmpeg-Builds)
 '''
 
 import json
+import logging
+import coloredlogs
 import os
-import threading
 import time
-
-import win32api
+import cv2
 import win32con
 import win32gui
 import win32print
 
-path = os.path.split(os.path.abspath(__file__))[0]
+# 设置日志颜色
+log_colors_config = {
+    'DEBUG': 'white',
+    'INFO': 'green',
+    'WARNING': 'yellow',
+    'ERROR': 'red',
+    'CRITICAL': 'bold_red',
+}
 
+# 设置终端日志
+coloredlogs.install(level='INFO', fmt='[%(levelname)s] [%(asctime)s]: %(message)s', colors=log_colors_config)
+logging.info("日志设置成功，Wallpaper开始运行")
+
+path = os.path.split(os.path.abspath(__file__))[0]
+logging.debug(f"当前工作目录{path}")
 
 def get_real_resolution() -> tuple[int, int]:
     # 获取真实的分辨率
@@ -34,22 +47,6 @@ def get_real_resolution() -> tuple[int, int]:
     h: int = win32print.GetDeviceCaps(hDC, win32con.DESKTOPVERTRES)
     return w, h
 
-
-def get_screen_size() -> tuple[int, int]:
-    # 获取缩放后的分辨率
-    w: int = win32api.GetSystemMetrics(0)
-    h: int = win32api.GetSystemMetrics(1)
-    return w, h
-
-
-def getdpi() -> float:
-    real_resolution: tuple[int, int] = get_real_resolution()
-    screen_size: tuple[int, int] = get_screen_size()
-
-    screen_scale_rate: float = round(real_resolution[0] / screen_size[0], 2) * 100
-    return screen_scale_rate
-
-
 def hide(hwnd: int, hwnds: None) -> None:
     hdef: int = win32gui.FindWindowEx(hwnd, 0, "SHELLDLL_DefView", None)  # 枚举窗口寻找特定类
     if hdef != 0:
@@ -58,51 +55,60 @@ def hide(hwnd: int, hwnds: None) -> None:
         while True:
             time.sleep(100)  # 进入循环防止壁纸退出
 
+def get_video_size(path):
+    video = cv2.VideoCapture(path)
+    # 获取视频的宽度（单位：像素）
+    w = video.get(cv2.CAP_PROP_FRAME_WIDTH)
+    # 获取视频的高度（单位：像素）
+    h = video.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    # 关闭视频文件
+    video.release()
+    return w,h
 
 # 使用ffplay播放视频
 def ffplay() -> None:
     with open(f"{path}\\config.json", encoding="utf-8") as config:
         config: dict[str, str] = json.load(config)
     video = config["video"]
-    os.popen(f"{path}\\ffplay\\ffplay.exe {video} -noborder -fs -loop 0 -loglevel quiet")
-    # 无边框、全屏、一直持续播放、取消控制台的输出
+    w,h=get_real_resolution()
+    
+    # 自适应全屏，防止黑边问题
+    vw,vh=get_video_size(video)
+    p=vw/vh
+    dvh=h
+    dvw=dvh*p
+    dvh=int(dvh)
+    dvw=int(dvw)
+
+    dx=(w-dvw)/2
+    dy=(h-dvh)/2
+    dx=int(dx)
+    dy=int(dy)
+
+    os.popen(f"{path}\\ffplay\\ffplay.exe {video} -noborder -left {dx} -top {dy} -x {dvw} -y {dvh} -loop 0  -loglevel quiet")
+    # 无边框、一直持续播放、取消控制台的输出
 
 
 def display() -> None:
+    logging.info("正在启动ffplay播放器播放视频...")
     ffplay()
-    time.sleep(0.5)
+    while True:
+        if win32gui.IsWindowVisible(win32gui.FindWindow("SDL_app", None)):
+            break
+        time.sleep(0.1)
+    logging.info("ffplay播放器启动成功！")
+    
     progman: int = win32gui.FindWindow("Progman", "Program Manager")  # 寻找Progman
+    logging.debug(f"已寻找到Progman窗口，窗口句柄为{progman}")
     win32gui.SendMessageTimeout(progman, 0x52C, 0, 0, 0, 0)  # 发送0x52C消息
+    logging.debug("已对Progman窗口发送0x52C消息")
     videowin: int = win32gui.FindWindow("SDL_app", None)  # 寻找ffplay 播放窗口
+    logging.debug(f"已寻找到ffplay播放器窗口，窗口句柄为{videowin}")
     win32gui.SetParent(videowin, progman)  # 设置子窗口
+    logging.debug("已将ffplay播放器窗口设置为Progman窗口的子窗口")
     win32gui.EnumWindows(hide, None)  # 枚举窗口，回调hide函数
+    logging.debug("已对窗口进行隐藏操作")
+    logging.info("窗口设置完成！")
 
-
-def back() -> None:
-    print("缩放自动调回初始值")
-    location: str = f"{path}\\SetDpi.exe"
-    global userdpi
-    userdpi = str(userdpi)
-    win32api.ShellExecute(0, "open", location, userdpi, "", 1)
-
-
-time.sleep(2)
-userdpi: int = getdpi()
-print(f"当前系统缩放率为:{userdpi}%", end="")
-if userdpi == 100:
-    print("缩放率无需调整")
-    display()
-    print("动态壁纸已设定完成")
-else:
-    print("正在调整为100%缩放率")
-    location: str = f"{path}\\SetDpi.exe"
-    win32api.ShellExecute(0, "open", location, " 100", "", 1)
-    print("运行中 请等待")
-    time.sleep(3)
-
-    display_thread: threading.Thread = threading.Thread(target=display)
-    back_thread: threading.Thread = threading.Thread(target=back)
-
-    display_thread.start()
-    time.sleep(1)
-    back_thread.start()
+display()
+logging.info("动态壁纸已设定完成")
