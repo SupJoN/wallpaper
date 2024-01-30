@@ -67,23 +67,34 @@ def get_video_size(path):
 
 # 使用ffplay播放视频
 def ffplay() -> None:
-    with open(f"{path}\\config.json", encoding="utf-8") as config:
-        config: dict[str, str] = json.load(config)
+    try:
+        with open(f"{path}\\config.json", "r", encoding="utf-8") as f:
+            config: dict[str, str] = json.load(f)
+    except IOError:
+        logging.error("配置文件读取失败")
+        with open(f"{path}\\config.json", "w", encoding="utf-8") as f:
+            config = {"video": ""}
+            # 保存 
+            json.dump(config, f, ensure_ascii=False, indent=4)
+            
+        logging.debug("配置文件创建成功")
+        exit()
+    else:
+        if(config["video"] == ""):
+            logging.error("请先配置视频文件路径")
+            exit()
+        else:
+            logging.info("配置文件读取成功")
     video = config["video"]
     w,h=get_real_resolution()
     
     # 自适应全屏，防止黑边问题
-    vw,vh=get_video_size(video)
-    p=vw/vh
-    dvh=h
-    dvw=dvh*p
-    dvh=int(dvh)
-    dvw=int(dvw)
-
-    dx=(w-dvw)/2
-    dy=(h-dvh)/2
-    dx=int(dx)
-    dy=int(dy)
+    vw, vh = get_video_size(video)
+    p = vw/vh
+    dvh = h
+    dvw = int(dvh*p)
+    dx = int((w-dvw)/2)
+    dy = 0
 
     os.popen(f"{path}\\ffplay\\ffplay.exe {video} -noborder -left {dx} -top {dy} -x {dvw} -y {dvh} -loop 0  -loglevel quiet")
     # 无边框、一直持续播放、取消控制台的输出
