@@ -14,16 +14,17 @@ Github @BtbN。(https://github.com/BtbN/FFmpeg-Builds)
 
 import json
 import logging
-import coloredlogs
 import os
 import time
+
+import coloredlogs
 import cv2
 import win32con
 import win32gui
 import win32print
 
 # 设置日志颜色
-log_colors_config = {
+log_colors_config: dict[str, str] = {
     'DEBUG': 'white',
     'INFO': 'green',
     'WARNING': 'yellow',
@@ -33,10 +34,11 @@ log_colors_config = {
 
 # 设置终端日志
 coloredlogs.install(level='INFO', fmt='[%(levelname)s] [%(asctime)s]: %(message)s', colors=log_colors_config)
-logging.info("日志设置成功，Wallpaper开始运行")
+logging.info("日志设置成功, Wallpaper开始运行")
 
-path = os.path.split(os.path.abspath(__file__))[0]
+path: str = os.path.split(os.path.abspath(__file__))[0]
 logging.debug(f"当前工作目录{path}")
+
 
 def get_real_resolution() -> tuple[int, int]:
     # 获取真实的分辨率
@@ -47,23 +49,33 @@ def get_real_resolution() -> tuple[int, int]:
     h: int = win32print.GetDeviceCaps(hDC, win32con.DESKTOPVERTRES)
     return w, h
 
+
 def hide(hwnd: int, hwnds: None) -> None:
     hdef: int = win32gui.FindWindowEx(hwnd, 0, "SHELLDLL_DefView", None)  # 枚举窗口寻找特定类
     if hdef != 0:
         workerw: int = win32gui.FindWindowEx(0, hwnd, "WorkerW", None)  # 找到hdef后寻找WorkerW
         win32gui.ShowWindow(workerw, win32con.SW_HIDE)  # 隐藏WorkerW
-        while True:
-            time.sleep(100)  # 进入循环防止壁纸退出
+        logging.debug("已对窗口进行隐藏操作")
+        logging.info("窗口设置完成")
+        logging.info("动态壁纸已设定完成")
+        try:
+            while True:
+                time.sleep(100)  # 进入循环防止壁纸退出
+        except KeyboardInterrupt:
+            logging.info("程序退出")
+            exit()
 
-def get_video_size(path):
-    video = cv2.VideoCapture(path)
+
+def get_video_size(path) -> tuple[float, float]:
+    video: cv2.VideoCapture = cv2.VideoCapture(path)
     # 获取视频的宽度（单位：像素）
-    w = video.get(cv2.CAP_PROP_FRAME_WIDTH)
+    w: float = video.get(cv2.CAP_PROP_FRAME_WIDTH)
     # 获取视频的高度（单位：像素）
-    h = video.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    h: float = video.get(cv2.CAP_PROP_FRAME_HEIGHT)
     # 关闭视频文件
     video.release()
-    return w,h
+    return w, h
+
 
 # 使用ffplay播放视频
 def ffplay() -> None:
@@ -74,52 +86,51 @@ def ffplay() -> None:
         logging.error("配置文件读取失败")
         with open(f"{path}\\config.json", "w", encoding="utf-8") as f:
             config = {"video": ""}
-            # 保存 
+            # 保存
             json.dump(config, f, ensure_ascii=False, indent=4)
-            
+
         logging.debug("配置文件创建成功")
         exit()
+    except json.JSONDecodeError:
+        logging.error("配置文件格式错误")
+        exit()
     else:
-        if(config["video"] == ""):
+        if (config["video"] == ""):
             logging.error("请先配置视频文件路径")
             exit()
         else:
             logging.info("配置文件读取成功")
     video = config["video"]
-    w,h=get_real_resolution()
-    
+    w, h = get_real_resolution()
+
     # 自适应全屏，防止黑边问题
     vw, vh = get_video_size(video)
-    p = vw/vh
+    p = vw / vh
     dvh = h
-    dvw = int(dvh*p)
-    dx = int((w-dvw)/2)
+    dvw = int(dvh * p)
+    dx = int((w - dvw) / 2)
     dy = 0
 
-    os.popen(f"{path}\\ffplay\\ffplay.exe {video} -noborder -left {dx} -top {dy} -x {dvw} -y {dvh} -loop 0  -loglevel quiet")
     # 无边框、一直持续播放、取消控制台的输出
+    os.popen(f"{path}\\ffplay\\ffplay.exe {video} -noborder -left {dx} -top {dy} -x {dvw} -y {dvh} -loop 0 -loglevel quiet")
 
 
 def display() -> None:
     logging.info("正在启动ffplay播放器播放视频...")
     ffplay()
-    while True:
-        if win32gui.IsWindowVisible(win32gui.FindWindow("SDL_app", None)):
-            break
+    while not win32gui.IsWindowVisible(win32gui.FindWindow("SDL_app", None)):
         time.sleep(0.1)
-    logging.info("ffplay播放器启动成功！")
-    
+    logging.info("ffplay播放器启动成功")
+
     progman: int = win32gui.FindWindow("Progman", "Program Manager")  # 寻找Progman
-    logging.debug(f"已寻找到Progman窗口，窗口句柄为{progman}")
+    logging.debug(f"已寻找到Progman窗口, 窗口句柄为{progman}")
     win32gui.SendMessageTimeout(progman, 0x52C, 0, 0, 0, 0)  # 发送0x52C消息
     logging.debug("已对Progman窗口发送0x52C消息")
     videowin: int = win32gui.FindWindow("SDL_app", None)  # 寻找ffplay 播放窗口
-    logging.debug(f"已寻找到ffplay播放器窗口，窗口句柄为{videowin}")
+    logging.debug(f"已寻找到ffplay播放器窗口, 窗口句柄为{videowin}")
     win32gui.SetParent(videowin, progman)  # 设置子窗口
     logging.debug("已将ffplay播放器窗口设置为Progman窗口的子窗口")
     win32gui.EnumWindows(hide, None)  # 枚举窗口，回调hide函数
-    logging.debug("已对窗口进行隐藏操作")
-    logging.info("窗口设置完成！")
+
 
 display()
-logging.info("动态壁纸已设定完成")
