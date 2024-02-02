@@ -12,11 +12,11 @@ Github @BtbN (https://github.com/BtbN/FFmpeg-Builds)
 import json
 import logging
 import os
+import subprocess
 import time
 import typing
 
 import coloredlogs
-import cv2
 import win32con
 import win32gui
 import win32print
@@ -50,15 +50,16 @@ def get_real_size() -> tuple[int, int]:
 
 
 # 获取视频的分辨率
-def get_video_size(path) -> tuple[float, float]:
-    video: cv2.VideoCapture = cv2.VideoCapture(path)
-    # 获取视频的宽度 (单位: 像素)
-    w: float = video.get(cv2.CAP_PROP_FRAME_WIDTH)
-    # 获取视频的高度 (单位: 像素)
-    h: float = video.get(cv2.CAP_PROP_FRAME_HEIGHT)
-    # 关闭视频文件
-    video.release()
-    return w, h
+def get_video_size(video: str) -> tuple[int, int]:
+    # 使用ffprobe获取视频的分辨率
+    process: subprocess.CompletedProcess = subprocess.run(f"\"{path}\\ffmpeg\\ffprobe.exe\" -v error -select_streams v:0 -show_entries stream=width,height -of json \"{video}\"", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # 错误处理
+    if process.returncode != 0:
+        logging.debug(f"ffprobe的退出代码为{process.returncode}")
+        logging.error("请正确填写视频文件路径")
+        exit()
+    data = json.loads(process.stdout)
+    return data["streams"][0]["width"], data["streams"][0]["height"]
 
 
 # 获取hide函数
@@ -89,7 +90,10 @@ def ffplay() -> os._wrap_close:
     except IOError:
         logging.error("配置文件读取失败")
         with open(f"{path}\\config.json", "w", encoding="utf-8") as f:
-            config = {"video": ""}
+            config = {
+                "video": "",
+                "disable_audio": False,
+            }
             # 保存
             json.dump(config, f, ensure_ascii=False, indent=4)
 
@@ -99,30 +103,43 @@ def ffplay() -> os._wrap_close:
         logging.error("配置文件格式错误")
         exit()
     else:
-        if (config["video"] == ""):
-            logging.error("请先配置视频文件路径")
+        try:
+            if not isinstance(video := config["video"], str):
+                logging.error("文件路径必须是字符串")
+                exit()
+            elif video == "":
+                logging.error("请先配置视频文件路径")
+                exit()
+        except:
+            logging.error("未找到视频文件路径配置(video)")
             exit()
-        else:
-            logging.info("配置文件读取成功")
-    video = config["video"]
+        try:
+            if not isinstance(disable_audio := config["disable_audio"], bool):
+                logging.error("禁用音频配置必须是布尔类型")
+                exit()
+        except KeyError:
+            logging.error("未找到禁用音频配置(disable_audio)")
+            exit()
+
+        logging.info("配置文件读取成功")
 
     # 自适应全屏, 防止黑边问题
     w, h = get_real_size()
     vw, vh = get_video_size(video)
-    p = vw / vh
+    p: float = vw / vh
     if p <= w / h:
-        dvh = h
-        dvw = int(dvh * p)
-        dx = int((w - dvw) / 2)
-        dy = 0
+        dvh: int = h
+        dvw: int = int(dvh * p)
+        dx: int = int((w - dvw) / 2)
+        dy: int = 0
     else:
-        dvw = w
-        dvh = int(dvw / p)
-        dx = 0
-        dy = int((h - dvh) / 2)
+        dvw: int = w
+        dvh: int = int(dvw / p)
+        dx: int = 0
+        dy: int = int((h - dvh) / 2)
 
     # 无边框, 一直持续播放, 取消控制台输出
-    return os.popen(f"{path}\\ffplay\\ffplay.exe {video} -noborder -left {dx} -top {dy} -x {dvw} -y {dvh} -loop 0 -loglevel quiet")
+    return os.popen(f"\"{path}\\ffmpeg\\ffplay.exe\" \"{video}\" -noborder -left {dx} -top {dy} -x {dvw} -y {dvh} -loop 0 -loglevel quiet{' -an' if disable_audio else ''}")
 
 
 def display() -> None:
