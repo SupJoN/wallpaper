@@ -75,7 +75,7 @@ def get_hide_func(process: subprocess.Popen) -> typing.Callable[[int, None], Non
 
 
 # 使用ffplay播放视频
-def ffplay() -> subprocess.CompletedProcess:
+def ffplay() -> subprocess.Popen:
     try:
         with open(f"{path}\\config.json", "r", encoding="utf-8") as f:
             config: dict[str, str] = json.load(f)
