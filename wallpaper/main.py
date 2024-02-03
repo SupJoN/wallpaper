@@ -21,17 +21,8 @@ import win32con
 import win32gui
 import win32print
 
-# 设置日志颜色
-log_colors_config: dict[str, str] = {
-    'DEBUG': 'white',
-    'INFO': 'green',
-    'WARNING': 'yellow',
-    'ERROR': 'red',
-    'CRITICAL': 'bold_red',
-}
-
 # 设置终端日志
-coloredlogs.install(level='INFO', fmt='[%(levelname)s] [%(asctime)s]: %(message)s', colors=log_colors_config)
+coloredlogs.install(level='INFO', fmt='[%(levelname)s] [%(asctime)s]: %(message)s')
 logging.info("日志设置成功, Wallpaper开始运行")
 
 path: str = os.path.split(os.path.abspath(__file__))[0]
@@ -55,7 +46,7 @@ def get_video_size(video: str) -> tuple[int, int]:
     process: subprocess.CompletedProcess = subprocess.run(f"\"{path}\\ffmpeg\\ffprobe.exe\" -v error -select_streams v:0 -show_entries stream=width,height -of json \"{video}\"", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     # 错误处理
     if process.returncode != 0:
-        logging.debug(f"ffprobe的退出代码为{process.returncode}")
+        logging.debug(f"ffprobe的终止代码为{process.returncode}")
         logging.error("请正确填写视频文件路径")
         exit()
     data = json.loads(process.stdout)
@@ -63,7 +54,7 @@ def get_video_size(video: str) -> tuple[int, int]:
 
 
 # 获取hide函数
-def get_hide_func(process: os._wrap_close) -> typing.Callable[[int, None], None]:
+def get_hide_func(process: subprocess.Popen) -> typing.Callable[[int, None], None]:
     def hide(hwnd: int, hwnds: None) -> None:
         hdef: int = win32gui.FindWindowEx(hwnd, 0, "SHELLDLL_DefView", None)  # 枚举窗口寻找特定类
         if hdef != 0:
@@ -73,8 +64,9 @@ def get_hide_func(process: os._wrap_close) -> typing.Callable[[int, None], None]
             logging.info("窗口设置完成")
             logging.info("动态壁纸已设定完成")
             try:
-                process.close()  # 阻塞主程序, 直到ffplay异常退出
+                process.communicate()  # 阻塞主程序, 直到ffplay异常退出
                 logging.error("ffplay异常终止")
+                logging.debug(f"终止代码{process.returncode}")
             except KeyboardInterrupt:
                 logging.info("程序退出")
                 exit()
@@ -83,7 +75,7 @@ def get_hide_func(process: os._wrap_close) -> typing.Callable[[int, None], None]
 
 
 # 使用ffplay播放视频
-def ffplay() -> os._wrap_close:
+def ffplay() -> subprocess.CompletedProcess:
     try:
         with open(f"{path}\\config.json", "r", encoding="utf-8") as f:
             config: dict[str, str] = json.load(f)
@@ -139,12 +131,12 @@ def ffplay() -> os._wrap_close:
         dy: int = int((h - dvh) / 2)
 
     # 无边框, 一直持续播放, 取消控制台输出
-    return os.popen(f"\"{path}\\ffmpeg\\ffplay.exe\" \"{video}\" -noborder -left {dx} -top {dy} -x {dvw} -y {dvh} -loop 0 -loglevel quiet{' -an' if disable_audio else ''}")
+    return subprocess.Popen(f"\"{path}\\ffmpeg\\ffplay.exe\" \"{video}\" -noborder -left {dx} -top {dy} -x {dvw} -y {dvh} -loop 0 -loglevel quiet{' -an' if disable_audio else ''}", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
 def display() -> None:
     logging.info("正在启动ffplay播放器播放视频...")
-    process: os._wrap_close = ffplay()
+    process: subprocess.Popen = ffplay()
     while not win32gui.IsWindowVisible(win32gui.FindWindow("SDL_app", None)):
         time.sleep(0.1)
     logging.info("ffplay播放器启动成功")
