@@ -142,11 +142,11 @@ def display() -> None:
     logging.info("ffplay播放器启动成功")
 
     progman: int = win32gui.FindWindow("Progman", "Program Manager")  # 寻找Progman
-    logging.debug(f"已寻找到Progman窗口, 窗口句柄为{progman}")
+    logging.debug(f"已寻找到Progman窗口, 窗口句柄为0x{progman:08X}")
     win32gui.SendMessageTimeout(progman, 0x52C, 0, 0, 0, 0)  # 发送0x52C消息
     logging.debug("已对Progman窗口发送0x52C消息")
     videowin: int = win32gui.FindWindow("SDL_app", None)  # 寻找ffplay播放窗口
-    logging.debug(f"已寻找到ffplay播放器窗口, 窗口句柄为{videowin}")
+    logging.debug(f"已寻找到ffplay播放器窗口, 窗口句柄为0x{videowin:08X}")
     win32gui.SetParent(videowin, progman)  # 设置子窗口
     logging.debug("已将ffplay播放器窗口设置为Progman窗口的子窗口")
     win32gui.EnumWindows(get_hide_func(process), None)  # 枚举窗口, 回调hide函数
